@@ -72,7 +72,7 @@ This project highlights:
 1.  Clone the repository:
     
     ```bash
-    git clone https://github.com/SrujayJakkidi/Data-Website-Project.git
+    git clone https://github.com/SrujayReddy/Data-Website-Project.git
     cd data-website
     
     ```
