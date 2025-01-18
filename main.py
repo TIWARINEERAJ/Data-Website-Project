@@ -1,6 +1,6 @@
 import pandas as pd
 import flask
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 import io
 import time
 import re
@@ -27,8 +27,6 @@ num_subscribed = 0
 @app.route('/')
 def home():
     global visit_count, click_A, click_B, locked_version
-    with open("index.html") as f:
-        html = f.read()
 
     if visit_count == 10:
         # After 10 visits, determine which version is better based on clicks
@@ -37,32 +35,21 @@ def home():
         else:
             locked_version = 'B'
 
-    if visit_count < 10:
-        if visit_count % 2 == 1:
-            # Version A
-            html = html.replace("VERSION_COLOR", "red").replace("VERSION_NAME", "A")
-        else:
-            # Version B
-            html = html.replace("VERSION_COLOR", "purple").replace("VERSION_NAME", "B")
-    else:
-        # After 10 visits, show the locked version
-        if locked_version == 'A':
-            html = html.replace("VERSION_COLOR", "red").replace("VERSION_NAME", "A")
-        else:
-            html = html.replace("VERSION_COLOR", "purple").replace("VERSION_NAME", "B")
-    visit_count += 1
+    version_color = "red" if (visit_count % 2 == 1 or locked_version == 'A') else "purple"
+    version_name = "A" if (visit_count % 2 == 1 or locked_version == 'A') else "B"
 
-    return html
+    visit_count += 1
+    return render_template('index.html', version_color=version_color, version_name=version_name)
+
 
 @app.route('/browse.html')
 def browse_handler():
     # Read the CSV file into a pandas DataFrame
     df = pd.read_csv("main.csv")
     # Convert the DataFrame to an HTML table
-    html_table = df.to_html(float_format="{:.10f}".format)
-    # Create the HTML content
-    html_content = "<html><body><h1>Browse Data</h1>{}</body></html>".format(html_table)
-    return html_content
+    html_table = df.to_html(classes='data', header="true", index=False)
+    return render_template('browse.html', table=html_table)
+
 
 @app.route('/browse.json')
 def browse_json():
@@ -88,10 +75,12 @@ def browse_json():
 
     return jsonify(data)
 
+
 @app.route('/visitors.json')
 def visitors_json():
     # Return the list of visitor IPs who have accessed browse.json
     return jsonify(list(visitors.keys()))
+
 
 @app.route('/donate.html')
 def donate():
@@ -102,9 +91,8 @@ def donate():
     elif from_version == 'B':
         click_B += 1
 
-    with open('donate.html') as f:
-        html = f.read()
-    return html
+    return render_template('donate.html')
+
 
 @app.route('/email', methods=["POST"])
 def email():
@@ -119,50 +107,47 @@ def email():
     # Sternly warn the user for invalid email
     return jsonify("Invalid Email Address. Please enter a valid email.")
 
-# Dashboard routes
 
 @app.route('/plot1.svg')
 def plot1():
-        df = pd.read_csv('main.csv')
-        df['rating'] = pd.to_numeric(df['rating'], errors='coerce')
-        df = df.dropna(subset=['rating'])
+    df = pd.read_csv('main.csv')
+    df['rating'] = pd.to_numeric(df['rating'], errors='coerce')
+    df = df.dropna(subset=['rating'])
 
-        bins = request.args.get('bins', default=10, type=int)
+    bins = request.args.get('bins', default=10, type=int)
 
-        fig, ax = plt.subplots()
-        ax.hist(df['rating'], bins=bins)
-        ax.set_xlabel('Player Rating')
-        ax.set_ylabel('Frequency')
-        ax.set_title(f'Histogram of Player Ratings with {bins} bins')
+    fig, ax = plt.subplots()
+    ax.hist(df['rating'], bins=bins)
+    ax.set_xlabel('Player Rating')
+    ax.set_ylabel('Frequency')
+    ax.set_title(f'Histogram of Player Ratings with {bins} bins')
 
-        img = io.BytesIO()
-        fig.savefig(img, format='svg')
-        img.seek(0)
-        plt.close(fig)
-        filename = "dashboard1-query.svg" if"bins" in request.args else "dashboard1.svg"
-        return flask.Response(img.getvalue(), content_type='image/svg+xml')
+    img = io.BytesIO()
+    fig.savefig(img, format='svg')
+    img.seek(0)
+    plt.close(fig)
+    return flask.Response(img.getvalue(), content_type='image/svg+xml')
+
 
 @app.route('/plot2.svg')
 def plot2():
-        df = pd.read_csv('main.csv')
-        df['rating'] = pd.to_numeric(df['rating'], errors='coerce')
-        df['draft_year'] = pd.to_numeric(df['draft_year'], errors='coerce')
-        df = df.dropna(subset=['rating', 'draft_year'])
+    df = pd.read_csv('main.csv')
+    df['rating'] = pd.to_numeric(df['rating'], errors='coerce')
+    df['draft_year'] = pd.to_numeric(df['draft_year'], errors='coerce')
+    df = df.dropna(subset=['rating', 'draft_year'])
 
-        fig, ax = plt.subplots()
-        ax.scatter(df['draft_year'], df['rating'])
-        ax.set_xlabel('Draft Year')
-        ax.set_ylabel('Player Rating')
-        ax.set_title('Player Rating vs Draft Year')
+    fig, ax = plt.subplots()
+    ax.scatter(df['draft_year'], df['rating'])
+    ax.set_xlabel('Draft Year')
+    ax.set_ylabel('Player Rating')
+    ax.set_title('Player Rating vs Draft Year')
 
-        img = io.BytesIO()
-        fig.savefig(img, format='svg')
-        img.seek(0)
-        plt.close(fig)
-        filename = "dashboard2.svg" 
-        return flask.Response(img.getvalue(), content_type='image/svg+xml')
+    img = io.BytesIO()
+    fig.savefig(img, format='svg')
+    img.seek(0)
+    plt.close(fig)
+    return flask.Response(img.getvalue(), content_type='image/svg+xml')
 
-# Save the plots locally for grading
 
 def save_dashboard_plots():
     try:
@@ -177,9 +162,8 @@ def save_dashboard_plots():
         ax.set_xlabel('Player Rating')
         ax.set_ylabel('Frequency')
         ax.set_title('Histogram of Player Ratings with 10 bins')
-        fig.savefig('dashboard1.svg')
+        fig.savefig('static/dashboard1.svg')
         plt.close(fig)
-        print("Saved dashboard1.svg")
 
         # Generate dashboard1-query.svg with bins=100
         fig, ax = plt.subplots()
@@ -187,9 +171,8 @@ def save_dashboard_plots():
         ax.set_xlabel('Player Rating')
         ax.set_ylabel('Frequency')
         ax.set_title('Histogram of Player Ratings with 100 bins')
-        fig.savefig('dashboard1-query.svg')
+        fig.savefig('static/dashboard1-query.svg')
         plt.close(fig)
-        print("Saved dashboard1-query.svg")
 
         # Generate dashboard2.svg
         fig, ax = plt.subplots()
@@ -197,13 +180,13 @@ def save_dashboard_plots():
         ax.set_xlabel('Draft Year')
         ax.set_ylabel('Player Rating')
         ax.set_title('Player Rating vs Draft Year')
-        fig.savefig('dashboard2.svg')
+        fig.savefig('static/dashboard2.svg')
         plt.close(fig)
-        print("Saved dashboard2.svg")
 
     except Exception as e:
         print("Error in save_dashboard_plots:", e)
 
+
 if __name__ == '__main__':
     save_dashboard_plots()
-    app.run(host="0.0.0.0", debug=True, threaded=False)  # Don't change this line!
+    app.run(host="0.0.0.0", debug=True, threaded=False)
